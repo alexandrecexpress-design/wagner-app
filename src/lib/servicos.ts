@@ -50,7 +50,7 @@ export const SERVICOS: Servico[] = [
     perguntas: [
       { id: 'objetivo', texto: 'Qual seu principal objetivo?', tipo: 'varias', opcoes: ['Planejar a sucessão (herança)', 'Proteger o patrimônio', 'Reduzir impostos', 'Organizar a gestão dos bens'] },
       { id: 'bens', texto: 'Quais bens entrariam na holding?', tipo: 'varias', opcoes: ['Imóveis', 'Empresas ou cotas', 'Investimentos', 'Veículos', 'Outros'] },
-      { id: 'imoveis', texto: 'Quantos imóveis, aproximadamente?', tipo: 'numero', opcional: true },
+      { id: 'quantidade', texto: 'Quantos bens, aproximadamente? (somando imóveis, empresas, veículos e outros)', tipo: 'numero' },
       { id: 'aluguel', texto: 'Os imóveis geram renda de aluguel?', tipo: 'opcoes', opcoes: ['Sim', 'Não', 'Alguns'] },
       { id: 'civil', texto: 'Estado civil', tipo: 'opcoes', opcoes: ['Solteiro(a)', 'Casado(a)', 'União estável', 'Divorciado(a)', 'Viúvo(a)'] },
       { id: 'herdeiros', texto: 'Quantos filhos ou herdeiros?', tipo: 'numero', opcional: true },
@@ -79,7 +79,8 @@ export const SERVICOS: Servico[] = [
       { id: 'tipos', texto: 'Quais certidões você precisa?', tipo: 'varias', opcoes: ['Nascimento', 'Casamento', 'Óbito', 'Matrícula do imóvel', 'Ônus reais', 'Inteiro teor', 'Negativa de débitos', 'Protesto', 'Outra'] },
       { id: 'nome', texto: 'Nome da pessoa ou número da matrícula', tipo: 'texto' },
       { id: 'local', texto: 'Cidade e estado do cartório (se souber)', tipo: 'texto', opcional: true },
-      { id: 'finalidade', texto: 'Para que vai usar?', tipo: 'opcoes', opcoes: ['Inventário', 'Compra ou venda de imóvel', 'Casamento ou divórcio', 'Cidadania estrangeira', 'Outro'] },
+      { id: 'finalidade', texto: 'Qual a finalidade da certidão?', tipo: 'opcoes', opcoes: ['Inventário', 'Usucapião', 'Regularização de imóvel', 'Compra ou venda de imóvel', 'Financiamento', 'Casamento ou divórcio', 'Processo judicial', 'Cidadania estrangeira', 'Documentação pessoal', 'Outra'] },
+      { id: 'finalidade_detalhe', texto: 'Explique a finalidade (para quem ou para qual órgão você vai apresentar)', tipo: 'texto' },
       { id: 'formato', texto: 'Formato', tipo: 'opcoes', opcoes: ['Digital (PDF)', 'Impressa', 'Tanto faz'] },
       { id: 'obs', texto: 'Algum detalhe a mais?', tipo: 'longo', opcional: true }
     ],
