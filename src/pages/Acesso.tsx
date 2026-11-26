@@ -38,6 +38,7 @@ function Entrar() {
   const [senha, setSenha] = useState('')
   const [erro, setErro] = useState('')
   const [enviando, setEnviando] = useState(false)
+  const [naoConfirmado, setNaoConfirmado] = useState(false)
   const navegar = useNavigate()
   const local = useLocation()
 
@@ -47,13 +48,14 @@ function Entrar() {
     setEnviando(true)
     const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password: senha })
     setEnviando(false)
-    if (error) { setErro(mensagemErro(error)); return }
+    if (error) { setErro(mensagemErro(error)); setNaoConfirmado(/not confirmed/i.test(error.message)); return }
     navegar((local.state as { de?: string })?.de || '/', { replace: true })
   }
 
   return (
     <form onSubmit={enviar} noValidate>
       {erro && <div className="alerta" role="alert">{erro}</div>}
+      {naoConfirmado && <ReenviarConfirmacao email={email.trim()} />}
       <Campo id="email" rotulo="E-mail" type="email" valor={email} aoMudar={setEmail} autoComplete="email" />
       <Campo id="senha" rotulo="Senha" type="password" valor={senha} aoMudar={setSenha} autoComplete="current-password" />
       <button className="botao" type="submit" disabled={enviando}>{enviando ? 'Entrando…' : 'Entrar'}</button>
@@ -103,7 +105,8 @@ function Cadastro() {
       <div className="sucesso" role="status">
         <h2>Confirme seu e-mail</h2>
         <p style={{ marginTop: 8 }}>Enviamos um link para <b>{confirmar}</b>. Abra o e-mail e toque no link para ativar sua conta. Depois é só entrar.</p>
-        <p className="muted" style={{ marginTop: 8, fontSize: 14 }}>Não chegou? Veja a caixa de spam ou lixo eletrônico.</p>
+        <p className="muted" style={{ marginTop: 8, fontSize: 14 }}>Não chegou? Veja a caixa de spam ou lixo eletrônico. Se ainda assim não aparecer, peça outro:</p>
+        <ReenviarConfirmacao email={confirmar} />
       </div>
     )
   }
@@ -129,5 +132,24 @@ function Cadastro() {
       </fieldset>
       <button className="botao" type="submit" disabled={enviando}>{enviando ? 'Criando conta…' : 'Criar conta'}</button>
     </form>
+  )
+}
+
+function ReenviarConfirmacao({ email }: { email: string }) {
+  const [estado, setEstado] = useState<'' | 'enviando' | 'ok' | string>('')
+  const reenviar = async () => {
+    setEstado('enviando')
+    const { error } = await supabase.auth.resend({ type: 'signup', email, options: { emailRedirectTo: window.location.origin + '/entrar' } })
+    setEstado(error ? mensagemErro(error) : 'ok')
+  }
+  if (estado === 'ok') return <p style={{ margin: '10px 0' }}>Novo e-mail enviado para <b>{email}</b>. Pode levar alguns minutos.</p>
+  return (
+    <div style={{ margin: '10px 0 14px' }}>
+      <button type="button" className="botao sec" onClick={reenviar} disabled={estado === 'enviando' || !email}>
+        {estado === 'enviando' ? 'Enviando…' : 'Reenviar e-mail de confirmação'}
+      </button>
+      {estado && estado !== 'enviando' && <div className="erro">{estado}</div>}
+      <p className="muted" style={{ fontSize: 14, marginTop: 8 }}>Ainda com problema? Fale com a gente no WhatsApp (11) 94200-4495.</p>
+    </div>
   )
 }
