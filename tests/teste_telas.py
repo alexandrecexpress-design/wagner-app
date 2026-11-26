@@ -1,0 +1,143 @@
+# Teste de ponta a ponta das telas com o Supabase simulado (Playwright).
+# Uso: build com VITE_SUPABASE_URL=http://mock.supabase.test, servir em :4173 e rodar este arquivo.
+import asyncio, base64, json, sys, time
+from playwright.async_api import async_playwright
+
+BASE = 'http://127.0.0.1:4173'
+UID = '00000000-0000-0000-0000-00000000000a'
+SID = '11111111-1111-1111-1111-111111111111'
+
+def jwt(sub):
+    b = lambda o: base64.urlsafe_b64encode(json.dumps(o).encode()).decode().rstrip('=')
+    return f"{b({'alg':'HS256','typ':'JWT'})}.{b({'sub':sub,'exp':int(time.time())+3600,'role':'authenticated','aud':'authenticated'})}.assinatura"
+
+def perfil(equipe):
+    return {'id': UID, 'nome': 'Maria Aparecida Souza', 'cpf': '52998224725', 'rg': '12.345.678-9', 'nascimento': '1978-04-12',
+            'email': 'maria@ex.com', 'celular': '11987654321', 'cep': '04567000', 'rua': 'Rua das Laranjeiras', 'numero': '215',
+            'complemento': None, 'bairro': 'Vila Esperança', 'cidade': 'São Paulo', 'uf': 'SP', 'equipe': equipe}
+
+SOL = {'id': SID, 'protocolo': 'WAG-2026-00001', 'cliente_id': UID, 'servico': 'usucapiao',
+       'respostas': [{'id': 'tempo', 'pergunta': 'Há quanto tempo você está no imóvel?', 'resposta': 'Mais de 15 anos'}],
+       'status': 'em_analise', 'prazo': '2026-12-02T02:59:59+00:00', 'resposta_equipe': None, 'valor_orcamento': None,
+       'criado_em': '2026-11-26T14:00:00+00:00', 'atualizado_em': '2026-11-26T14:00:00+00:00'}
+
+class Mock:
+    def __init__(self, equipe):
+        self.equipe = equipe; self.chamadas = []; self.criadas = []
+    async def rota(self, route):
+        req = route.request; url = req.url; m = req.method
+        self.chamadas.append((m, url.split('mock.supabase.test')[1][:90]))
+        obj = 'vnd.pgrst.object' in (req.headers.get('accept') or '')
+        def resp(body, status=200, headers=None):
+            h = {'content-type': 'application/json', 'access-control-allow-origin': '*', 'access-control-allow-headers': '*',
+                 'access-control-expose-headers': 'content-range', **(headers or {})}
+            return route.fulfill(status=status, body=json.dumps(body), headers=h)
+        if m == 'OPTIONS': return await resp({})
+        if '/auth/v1/token' in url:
+            return await resp({'access_token': jwt(UID), 'token_type': 'bearer', 'expires_in': 3600, 'expires_at': int(time.time()) + 3600,
+                               'refresh_token': 'r', 'user': {'id': UID, 'email': 'maria@ex.com', 'aud': 'authenticated', 'role': 'authenticated'}})
+        if '/auth/v1/user' in url:
+            return await resp({'id': UID, 'email': 'maria@ex.com', 'aud': 'authenticated', 'role': 'authenticated'})
+        if '/auth/v1/logout' in url: return await resp({}, 204)
+        if '/rest/v1/perfis' in url:
+            p = perfil(self.equipe); return await resp(p if obj else [p])
+        if '/rest/v1/avisos' in url:
+            return await resp([], headers={'content-range': '*/0'})
+        if '/rest/v1/rpc/previsao_prazo' in url: return await resp('2026-12-02T02:59:59+00:00')
+        if '/rest/v1/solicitacoes' in url:
+            if m == 'POST':
+                body = json.loads(req.post_data); self.criadas.append(body)
+                return await resp({**SOL, 'servico': body['servico'], 'respostas': body['respostas']} if obj else [SOL], 201)
+            if m == 'PATCH':
+                self.criadas.append(json.loads(req.post_data)); return await resp([], 204)
+            if m == 'HEAD': return await resp(None, headers={'content-range': '0-0/1'})
+            linha = {**SOL, 'perfis': {'nome': 'Maria Aparecida Souza', 'celular': '11987654321', 'cpf': '52998224725'}}
+            return await resp(linha if obj else [linha], headers={'content-range': '0-0/1'})
+        if '/rest/v1/documentos' in url:
+            if m == 'POST': self.criadas.append(json.loads(req.post_data)); return await resp(None, 201)
+            return await resp([])
+        if '/storage/v1/object/documentos/' in url: return await resp({'Key': 'documentos/x', 'Id': 'x'})
+        return await resp({'message': 'rota não simulada ' + url}, 404)
+
+async def rodar(p, equipe):
+    b = await p.chromium.launch(executable_path='/usr/bin/google-chrome')
+    ctx = await b.new_context(viewport={'width': 400, 'height': 860}, service_workers='block')
+    pg = await ctx.new_page()
+    erros = []
+    pg.on('pageerror', lambda e: erros.append(str(e)))
+    mock = Mock(equipe)
+    await pg.route('http://mock.supabase.test/**', mock.rota)
+    await pg.route('https://viacep.com.br/**', lambda r: r.fulfill(json={'logradouro': 'Rua X', 'bairro': 'Centro', 'localidade': 'Campinas', 'uf': 'SP'}))
+    return b, pg, erros, mock
+
+def checar(c, msg):
+    if not c: print('FALHOU:', msg); sys.exit(1)
+
+async def main():
+    async with async_playwright() as p:
+        # ---------- Cadastro: validações e CEP ----------
+        b, pg, erros, mock = await rodar(p, False)
+        await pg.goto(BASE + '/cadastro'); await pg.wait_for_selector('text=Cadastro')
+        await pg.fill('#cpf', '12345678900'); await pg.fill('#cep', '13010000'); await pg.wait_for_timeout(300)
+        checar(await pg.input_value('#cidade') == 'Campinas', 'CEP preenche cidade')
+        checar(await pg.input_value('#cpf') == '123.456.789-00', 'máscara do CPF')
+        await pg.click('button[type=submit]')
+        checar(await pg.locator('text=CPF inválido').count() == 1, 'CPF inválido apontado')
+        checar(await pg.locator('text=Necessário para continuar').count() == 1, 'LGPD obrigatória')
+        await pg.screenshot(path='/tmp/t-cadastro.png', full_page=False)
+        await b.close()
+
+        # ---------- Cliente: login, orçamento com documento ----------
+        b, pg, erros, mock = await rodar(p, False)
+        await pg.goto(BASE + '/entrar')
+        await pg.fill('#email', 'maria@ex.com'); await pg.fill('#senha', 'segredo123'); await pg.click('button[type=submit]')
+        await pg.wait_for_selector('h1:has-text("Serviços")')
+        await pg.screenshot(path='/tmp/t-servicos.png')
+        await pg.click(".servico:has-text(\"Usucapião\")"); await pg.wait_for_selector("text=O que você quer fazer?"); await pg.click(".opcao:has-text(\"Orçamento gratuito\")"); await pg.wait_for_selector(".passos")
+        await pg.click('button:has-text("Continuar")')
+        checar(await pg.locator('text=Responda esta pergunta').count() >= 5, 'obrigatórias apontadas')
+        for t in ['Mais de 15 anos', 'Urbano (cidade)', 'Moradia', 'Recibo de compra']: await pg.click(f'.chips span:text-is("{t}")')
+        await pg.locator('fieldset:has-text("Paga IPTU") .chips span:text-is("Sim")').click()
+        await pg.locator('fieldset:has-text("reclamou a posse") .chips span:text-is("Não")').click()
+        await pg.fill('#p-local', 'São Paulo/SP')
+        await pg.click('button:has-text("Continuar")')
+        await pg.wait_for_selector('text=Envio opcional')
+        await pg.set_input_files('#arquivos', files=[{'name': 'IPTU 2026 ção.pdf', 'mimeType': 'application/pdf', 'buffer': b'%PDF-1.4 teste'}])
+        checar(await pg.locator('.arquivos li').count() == 1, 'arquivo listado')
+        await pg.click('button:has-text("Continuar")')
+        await pg.wait_for_selector('text=Revisar e enviar')
+        checar(await pg.locator('text=quarta-feira, 2 de dezembro').count() >= 0, 'prazo')
+        await pg.screenshot(path='/tmp/t-revisar.png')
+        await pg.click('button:has-text("Enviar solicitação")')
+        await pg.wait_for_selector('text=Solicitação enviada')
+        checar(await pg.locator('text=WAG-2026-00001').count() == 1, 'protocolo na tela')
+        sol = mock.criadas[0]
+        checar(sol['servico'] == 'usucapiao' and len(sol['respostas']) == 7, 'respostas enviadas: %s' % sol)
+        doc = mock.criadas[1]
+        checar(doc['caminho'].startswith(f'{UID}/{SID}/') and 'IPTU_2026_cao.pdf' in doc['caminho'], 'caminho do arquivo: ' + doc['caminho'])
+        await pg.screenshot(path='/tmp/t-enviada.png')
+        await pg.click('text=Acompanhar solicitação'); await pg.wait_for_selector('text=Protocolo WAG-2026-00001')
+        await pg.screenshot(path='/tmp/t-detalhe.png', full_page=True)
+        await pg.click('text=Perfil'); await pg.wait_for_selector('text=529.***.***-25')
+        checar(not erros, 'erros de JS: %s' % erros)
+        await b.close()
+
+        # ---------- Equipe: painel ----------
+        b, pg, erros, mock = await rodar(p, True)
+        await pg.set_viewport_size({'width': 1200, 'height': 860})
+        await pg.goto(BASE + '/entrar')
+        await pg.fill('#email', 'ana@wagner.com'); await pg.fill('#senha', 'segredo123'); await pg.click('button[type=submit]')
+        await pg.wait_for_selector('text=Painel da equipe')
+        await pg.screenshot(path='/tmp/t-painel.png')
+        await pg.click('td:has-text("Maria Aparecida Souza")')
+        await pg.wait_for_selector('text=Respostas do cliente')
+        await pg.select_option('#status', 'orcamento_enviado'); await pg.fill('#valor', '3.500,00'); await pg.fill('#resp', 'Usucapião extrajudicial.')
+        await pg.click('button:has-text("Salvar e avisar cliente")'); await pg.wait_for_selector('text=O cliente foi avisado')
+        up = mock.criadas[-1]
+        checar(up == {'status': 'orcamento_enviado', 'resposta_equipe': 'Usucapião extrajudicial.', 'valor_orcamento': 3500}, 'atualização: %s' % up)
+        await pg.screenshot(path='/tmp/t-painel-detalhe.png')
+        checar(not erros, 'erros de JS: %s' % erros)
+        await b.close()
+    print('TESTES DE TELA PASSARAM')
+
+asyncio.run(main())
