@@ -2,8 +2,10 @@ import { useState, type FormEvent } from 'react'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { supabase, mensagemErro } from '../lib/supabase'
 import { Campo } from '../components/ui'
-import { FormDadosPessoais } from '../components/DadosPessoais'
-import { DADOS_VAZIOS, paraBanco, validarDados, type DadosPessoais, type Erros } from '../lib/validacao'
+import { TextoTermo } from '../components/Termo'
+import { CADASTRO_VAZIO, validarCadastro, type DadosCadastro, type Erros } from '../lib/validacao'
+import { TERMO_VERSAO } from '../lib/termo'
+import { soDigitos } from '../lib/formato'
 
 function Capa() {
   return (
@@ -68,31 +70,32 @@ function Entrar() {
 }
 
 function Cadastro() {
-  const [d, setD] = useState<DadosPessoais>(DADOS_VAZIOS)
-  const [senha, setSenha] = useState('')
-  const [senha2, setSenha2] = useState('')
-  const [lgpd, setLgpd] = useState(false)
+  const [d, setD] = useState<DadosCadastro>(CADASTRO_VAZIO)
   const [erros, setErros] = useState<Erros>({})
   const [erro, setErro] = useState('')
   const [enviando, setEnviando] = useState(false)
   const [confirmar, setConfirmar] = useState('')
   const navegar = useNavigate()
+  const m = <K extends keyof DadosCadastro>(k: K) => (v: DadosCadastro[K]) => {
+    setD(x => ({ ...x, [k]: v }))
+    setErros(er => (er[k] ? { ...er, [k]: undefined } : er))
+  }
 
   const enviar = async (e: FormEvent) => {
     e.preventDefault(); setErro('')
-    const er = validarDados(d, true)
-    if (senha.length < 8) er.senha = 'Mínimo 8 caracteres'
-    if (senha !== senha2) er.senha2 = 'As senhas não conferem'
-    if (!lgpd) er.lgpd = 'Necessário para continuar'
+    const er = validarCadastro(d)
     setErros(er)
     if (Object.keys(er).length) {
-      setTimeout(() => (document.querySelector('.ruim input, .ruim select') as HTMLElement | null)?.focus(), 0)
+      setTimeout(() => (document.querySelector('.ruim input') as HTMLElement | null)?.focus(), 0)
       return
     }
     setEnviando(true)
     const { data, error } = await supabase.auth.signUp({
-      email: d.email.trim(), password: senha,
-      options: { emailRedirectTo: window.location.origin + '/entrar', data: paraBanco(d) }
+      email: d.email.trim(), password: d.senha,
+      options: {
+        emailRedirectTo: window.location.origin + '/entrar',
+        data: { nome: d.nome.trim().replace(/\s+/g, ' '), celular: soDigitos(d.celular), lgpd: 'true', lgpd_versao: TERMO_VERSAO }
+      }
     })
     setEnviando(false)
     if (error) { setErro(mensagemErro(error)); window.scrollTo(0, 0); return }
@@ -113,23 +116,28 @@ function Cadastro() {
 
   return (
     <form onSubmit={enviar} noValidate>
-      <h2>Cadastro</h2>
-      <p className="muted" style={{ marginTop: 4 }}>Leva cerca de 2 minutos. Usamos seus dados apenas para analisar e contratar os serviços.</p>
-      {erro && <div className="alerta" role="alert" style={{ marginTop: 14 }}>{erro}</div>}
-      <FormDadosPessoais d={d} setD={setD} erros={erros} novo />
-      <fieldset className="grupo"><legend>Acesso</legend>
-        <div className="duas">
-          <Campo id="senha" rotulo="Senha (mín. 8 caracteres)" type="password" valor={senha} aoMudar={setSenha} erro={erros.senha} autoComplete="new-password" />
-          <Campo id="senha2" rotulo="Confirmar senha" type="password" valor={senha2} aoMudar={setSenha2} erro={erros.senha2} autoComplete="new-password" />
-        </div>
-        <div className={erros.lgpd ? 'campo ruim' : 'campo'}>
-          <label className="marcar">
-            <input type="checkbox" checked={lgpd} onChange={e => setLgpd(e.target.checked)} />
-            <span>Autorizo a Wagner Regularização Imobiliária a usar meus dados e documentos para analisar meu caso e prestar os serviços contratados, conforme a LGPD.</span>
-          </label>
-          {erros.lgpd && <div className="erro">{erros.lgpd}</div>}
-        </div>
-      </fieldset>
+      <h2>Criar conta</h2>
+      <p className="muted" style={{ margin: '4px 0 16px' }}>Leva menos de 1 minuto.</p>
+      {erro && <div className="alerta" role="alert">{erro}</div>}
+      <Campo id="nome" rotulo="Nome completo" valor={d.nome} aoMudar={m('nome')} erro={erros.nome} autoComplete="name" />
+      <Campo id="email" rotulo="E-mail" type="email" valor={d.email} aoMudar={m('email')} erro={erros.email} autoComplete="email" />
+      <Campo id="celular" rotulo="WhatsApp ou telefone" valor={d.celular} aoMudar={m('celular')} erro={erros.celular}
+        mascara="celular" autoComplete="tel-national" placeholder="(00) 00000-0000" />
+      <div className="duas">
+        <Campo id="senha" rotulo="Senha (mín. 8 caracteres)" type="password" valor={d.senha} aoMudar={m('senha')} erro={erros.senha} autoComplete="new-password" />
+        <Campo id="senha2" rotulo="Confirmar senha" type="password" valor={d.senha2} aoMudar={m('senha2')} erro={erros.senha2} autoComplete="new-password" />
+      </div>
+      <details className="termo-caixa">
+        <summary>Ler o Termo de Consentimento e Privacidade (LGPD)</summary>
+        <TextoTermo />
+      </details>
+      <div className={erros.termo ? 'campo ruim' : 'campo'}>
+        <label className="marcar">
+          <input type="checkbox" id="termo" checked={d.termo} onChange={e => m('termo')(e.target.checked)} />
+          <span>Li e aceito o <b>Termo de Consentimento e Privacidade</b> e autorizo a Wagner Regularização Imobiliária a tratar meus dados pessoais e os documentos que eu enviar para analisar meu caso e prestar os serviços, conforme a Lei nº 13.709/2018 (LGPD).</span>
+        </label>
+        {erros.termo && <div className="erro">{erros.termo}</div>}
+      </div>
       <button className="botao" type="submit" disabled={enviando}>{enviando ? 'Criando conta…' : 'Criar conta'}</button>
     </form>
   )

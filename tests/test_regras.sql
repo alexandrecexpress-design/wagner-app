@@ -1,9 +1,9 @@
 \set ON_ERROR_STOP on
 -- Usuários: Maria (cliente), João (cliente), Ana (equipe)
 insert into auth.users (id, email, raw_user_meta_data) values
- ('00000000-0000-0000-0000-00000000000a','maria@ex.com','{"nome":"Maria Souza","cpf":"52998224725","rg":"123","nascimento":"1978-04-12","celular":"11987654321","cep":"04567000","rua":"Rua A","numero":"1","bairro":"B","cidade":"São Paulo","uf":"sp"}'),
- ('00000000-0000-0000-0000-00000000000b','joao@ex.com','{"nome":"João Lima","cpf":"11144477735","rg":"456","nascimento":"1980-01-01","celular":"11911112222","cep":"01000000","rua":"Rua C","numero":"2","bairro":"D","cidade":"São Paulo","uf":"SP"}'),
- ('00000000-0000-0000-0000-00000000000c','ana@wagner.com','{"nome":"Ana Equipe","cpf":"39053344705","rg":"789","nascimento":"1990-01-01","celular":"11933334444","cep":"01000000","rua":"Rua E","numero":"3","bairro":"F","cidade":"São Paulo","uf":"SP"}');
+ ('00000000-0000-0000-0000-00000000000a','maria@ex.com','{"nome":"Maria Souza","cpf":"52998224725","rg":"123","nascimento":"1978-04-12","celular":"11987654321","cep":"04567000","rua":"Rua A","numero":"1","bairro":"B","cidade":"São Paulo","uf":"sp","lgpd":"true"}'),
+ ('00000000-0000-0000-0000-00000000000b','joao@ex.com','{"nome":"João Lima","cpf":"11144477735","rg":"456","nascimento":"1980-01-01","celular":"11911112222","cep":"01000000","rua":"Rua C","numero":"2","bairro":"D","cidade":"São Paulo","uf":"SP","lgpd":"true"}'),
+ ('00000000-0000-0000-0000-00000000000c','ana@wagner.com','{"nome":"Ana Equipe","cpf":"39053344705","rg":"789","nascimento":"1990-01-01","celular":"11933334444","cep":"01000000","rua":"Rua E","numero":"3","bairro":"F","cidade":"São Paulo","uf":"SP","lgpd":"true"}');
 update public.perfis set equipe = true where email = 'ana@wagner.com';
 
 do $$ begin
@@ -17,10 +17,37 @@ end $$;
 -- CPF inválido não cria perfil
 do $$ begin
   begin
-    insert into auth.users (email, raw_user_meta_data) values ('x@ex.com','{"nome":"Fulano Tal","cpf":"12345678900","rg":"1","nascimento":"1990-01-01","celular":"11999999999","cep":"01000000","rua":"R","numero":"1","bairro":"B","cidade":"C","uf":"SP"}');
+    insert into auth.users (email, raw_user_meta_data) values ('x@ex.com','{"nome":"Fulano Tal","cpf":"12345678900","rg":"1","nascimento":"1990-01-01","celular":"11999999999","cep":"01000000","rua":"R","numero":"1","bairro":"B","cidade":"C","uf":"SP","lgpd":"true"}');
     raise exception 'CPF inválido foi aceito';
   exception when check_violation then null; end;
 end $$;
+
+-- Cadastro simples (só nome, e-mail e celular) funciona
+insert into auth.users (id, email, raw_user_meta_data) values
+ ('00000000-0000-0000-0000-00000000000d','pedro@ex.com','{"nome":"Pedro Alves","celular":"11955556666","lgpd":"true","lgpd_versao":"2026-11"}');
+do $$ begin
+  assert (select cpf is null and cidade is null and lgpd_versao = '2026-11' from public.perfis where email='pedro@ex.com'), 'perfil simples';
+end $$;
+-- Sem aceite da LGPD a conta não é criada
+do $$ begin
+  begin
+    insert into auth.users (email, raw_user_meta_data) values ('sem@ex.com','{"nome":"Sem Aceite","celular":"11955556666"}');
+    raise exception 'conta criada sem LGPD';
+  exception when raise_exception then
+    if sqlerrm <> 'aceite_lgpd_obrigatorio' then raise; end if;
+  end;
+end $$;
+-- Pedro informa o CPF depois, uma única vez
+begin;
+set local role authenticated;
+set local request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000d';
+update public.perfis set cpf = '86288366757', cidade = 'Santos';
+update public.perfis set cpf = '11144477735';
+do $$ begin
+  assert (select cpf from public.perfis where id = auth.uid()) = '86288366757', 'cpf definido uma vez';
+  assert (select cidade from public.perfis where id = auth.uid()) = 'Santos', 'cidade opcional salva';
+end $$;
+commit;
 
 -- ===== Maria (cliente) =====
 begin;
@@ -93,7 +120,7 @@ set local role authenticated;
 set local request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000c';
 do $$ begin
   assert (select count(*) from public.solicitacoes) = 1, 'equipe vê pedidos';
-  assert (select count(*) from public.perfis) = 3, 'equipe vê clientes';
+  assert (select count(*) from public.perfis) = 4, 'equipe vê clientes';
   assert (select count(*) from storage.objects) = 1, 'equipe vê arquivos';
 end $$;
 update public.solicitacoes set status = 'pendente_cliente', resposta_equipe = 'Envie o carnê de IPTU.';

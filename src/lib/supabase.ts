@@ -12,9 +12,7 @@ export const supabase = createClient(url || 'http://localhost', chave || 'sem-ch
 export type Status = 'em_analise' | 'pendente_cliente' | 'orcamento_enviado' | 'encerrada'
 
 export interface Perfil {
-  id: string; nome: string; cpf: string; rg: string; nascimento: string; email: string; celular: string
-  cep: string; rua: string; numero: string; complemento: string | null; bairro: string; cidade: string; uf: string
-  equipe: boolean
+  id: string; nome: string; email: string; celular: string; equipe: boolean
 }
 export interface Resposta { id: string; pergunta: string; resposta: string }
 export interface Solicitacao {
@@ -43,7 +41,8 @@ export function mensagemErro(e: unknown): string {
   if (/Invalid login credentials/i.test(m)) return 'E-mail ou senha incorretos.'
   if (/Email not confirmed/i.test(m)) return 'Confirme seu e-mail antes de entrar. Procure a mensagem na sua caixa de entrada.'
   if (/User already registered/i.test(m)) return 'Este e-mail já tem cadastro. Entre ou recupere a senha.'
-  if (/Database error saving new user/i.test(m)) return 'Não foi possível criar a conta. Se este CPF já tem cadastro, entre ou recupere a senha.'
+  if (/aceite_lgpd_obrigatorio/i.test(m)) return 'Para criar a conta, é preciso aceitar o termo de privacidade.'
+  if (/Database error saving new user/i.test(m)) return 'Não foi possível criar a conta. Tente de novo ou fale com a gente pelo WhatsApp.'
   if (/Password should be at least/i.test(m)) return 'A senha precisa ter pelo menos 6 caracteres.'
   if (/rate limit|too many/i.test(m)) return 'Muitas tentativas. Aguarde alguns minutos e tente de novo.'
   if (/Failed to fetch|NetworkError/i.test(m)) return 'Sem conexão. Verifique sua internet e tente de novo.'

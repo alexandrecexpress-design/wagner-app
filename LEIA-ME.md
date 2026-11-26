@@ -4,13 +4,13 @@ App web instalável (PWA) para clientes pedirem orçamento gratuito, enviarem do
 
 **O que tem pronto**
 
-- Cadastro completo (nome, CPF validado, RG, nascimento, e-mail, celular, endereço com busca automática pelo CEP), aceite LGPD, confirmação por e-mail, login e recuperação de senha.
+- Cadastro simples: nome completo, e-mail, WhatsApp ou telefone e senha, com aceite obrigatório do Termo de Consentimento e Privacidade (LGPD; texto em `src/lib/termo.ts`, versão aceita fica gravada). Confirmação por e-mail, login e recuperação de senha.
 - Serviços: Usucapião, Inventário, Holding Patrimonial, Regularização de Imóvel e Certidões em geral, cada um com explicação e perguntas próprias.
 - Orçamento em 3 etapas (perguntas, documentos opcionais, revisão), protocolo `WAG-AAAA-00001` e prazo de 3 dias úteis calculado no servidor (pula fins de semana e feriados da tabela `feriados`).
 - Acompanhamento: linha do tempo, resposta e valor do orçamento, arquivos enviados pela equipe, envio de mais documentos e botão de WhatsApp com o protocolo.
-- Painel da equipe (`/painel`): contadores, prazo vencido em destaque, busca por protocolo/nome/CPF/celular, dados completos do cliente, download dos documentos, mudança de status, mensagem, valor e anexo de proposta.
+- Painel da equipe (`/painel`): contadores, prazo vencido em destaque, busca por protocolo/nome/e-mail/telefone, contato do cliente, download dos documentos, mudança de status, mensagem, valor e anexo de proposta.
 - Avisos no app e por e-mail quando o status muda, e e-mail para a equipe a cada novo pedido.
-- Segurança: cada cliente só acessa os próprios dados e arquivos (Row Level Security). Os documentos ficam numa pasta privada e só abrem por links temporários de 2 minutos. O cliente não consegue mudar o status, o CPF nem se colocar na equipe.
+- Segurança: cada cliente só acessa os próprios dados e arquivos (Row Level Security). Os documentos ficam numa pasta privada e só abrem por links temporários de 2 minutos. O cliente não consegue mudar o status, o e-mail nem se colocar na equipe.
 
 ---
 
@@ -21,7 +21,7 @@ Leva cerca de 1 hora na primeira vez. Você vai precisar de 4 contas: **Supabase
 ### 1. Supabase (banco, login e arquivos)
 
 1. Crie uma conta em supabase.com, depois **New project**. Em **Region**, escolha **South America (São Paulo)**. Guarde a senha do banco.
-2. Abra **SQL Editor > New query**, cole todo o conteúdo de `supabase/migrations/0001_inicial.sql` e clique em **Run**.
+2. Abra **SQL Editor > New query** e rode, um de cada vez e nesta ordem, os arquivos de `supabase/migrations/`: `0001_inicial.sql`, `0002_permissoes.sql` e `0003_cadastro_simples.sql`.
 3. Em **Authentication > URL Configuration**:
    - **Site URL**: o endereço final do app (por exemplo `https://app.wagnerregularizacao.com.br`).
    - **Redirect URLs**: adicione `https://app.wagnerregularizacao.com.br/**`.
@@ -100,7 +100,7 @@ Ao entrar, essa pessoa vai direto para o **Painel**. Para tirar o acesso, troque
 
 ## LGPD: o que ainda depende de vocês
 
-- Uma **Política de Privacidade** escrita pelo jurídico, publicada num link e citada no aceite do cadastro (`src/pages/Acesso.tsx`).
+- Revisar o **Termo de Consentimento** (`src/lib/termo.ts`) com o jurídico e preencher CNPJ, endereço e e-mail da empresa no topo do arquivo. Se o texto mudar, troque `TERMO_VERSAO`.
 - Definir por quanto tempo os documentos ficam guardados e quem da equipe tem acesso ao painel.
 - O banco fica em São Paulo, os arquivos são privados e cada acesso usa um link temporário. Com o plano Pro há backup diário.
 

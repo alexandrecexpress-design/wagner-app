@@ -4,7 +4,7 @@ import { AreaArquivos, Carregando, ListaArquivos, Pagina, useToast } from '../co
 import { Icone } from '../components/Icone'
 import { supabase, STATUS, mensagemErro, type Documento, type Perfil, type Solicitacao, type Status } from '../lib/supabase'
 import { servicoPorId, linkWhatsApp } from '../lib/servicos'
-import { arquivoAceito, cpfOculto, data, dataHora, dataLonga, dataSimples, mascaras, reais } from '../lib/formato'
+import { arquivoAceito, data, dataHora, dataLonga, mascaras, reais } from '../lib/formato'
 import { abrirDocumento, enviarDocumentos } from '../lib/arquivos'
 import { atrasada } from '../pages/Solicitacoes'
 
@@ -19,7 +19,6 @@ export default function PainelSolicitacao() {
   const [valor, setValor] = useState('')
   const [salvando, setSalvando] = useState(false)
   const [enviando, setEnviando] = useState('')
-  const [verCpf, setVerCpf] = useState(false)
 
   const carregar = useCallback(async () => {
     const { data: sol } = await supabase.from('solicitacoes').select('*').eq('id', id!).maybeSingle()
@@ -92,12 +91,8 @@ export default function PainelSolicitacao() {
               <h2 style={{ fontSize: 18, marginBottom: 6 }}>Cliente</h2>
               <dl className="dados">
                 <div><dt>Nome</dt><dd>{cli.nome}</dd></div>
-                <div><dt>CPF</dt><dd>{verCpf ? mascaras.cpf(cli.cpf) : cpfOculto(cli.cpf)} <button className="link" style={{ minHeight: 0, padding: 0, marginLeft: 8 }} onClick={() => setVerCpf(!verCpf)}>{verCpf ? 'ocultar' : 'mostrar'}</button></dd></div>
-                <div><dt>RG</dt><dd>{cli.rg}</dd></div>
-                <div><dt>Nascimento</dt><dd>{dataSimples(cli.nascimento)}</dd></div>
                 <div><dt>E-mail</dt><dd>{cli.email}</dd></div>
-                <div><dt>Celular</dt><dd>{mascaras.celular(cli.celular)}</dd></div>
-                <div><dt>Endereço</dt><dd>{`${cli.rua}, ${cli.numero}${cli.complemento ? ' - ' + cli.complemento : ''}, ${cli.bairro}, ${cli.cidade}/${cli.uf}, CEP ${mascaras.cep(cli.cep)}`}</dd></div>
+                <div><dt>WhatsApp ou telefone</dt><dd>{mascaras.celular(cli.celular)}</dd></div>
               </dl>
               <a className="botao wa" style={{ marginTop: 12 }} target="_blank" rel="noopener noreferrer"
                 href={linkWhatsApp(`Olá, ${cli.nome.split(' ')[0]}! Aqui é da Wagner Regularização Imobiliária, sobre a solicitação ${s.protocolo} (${sv?.nome}).`, '55' + cli.celular)}>

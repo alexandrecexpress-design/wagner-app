@@ -154,3 +154,7 @@ td .nw{white-space:nowrap}
 @media(max-width:700px){.tabela-wrap table thead{display:none}.tabela-wrap tr{display:grid;grid-template-columns:1fr auto;padding:10px 4px;border-bottom:1px solid var(--linha)}.tabela-wrap td{border:0;padding:3px 10px}.tabela-wrap td.esconde{display:none}}
 @media(prefers-reduced-motion:no-preference){main{animation:entra .22s ease-out}@keyframes entra{from{opacity:0;transform:translateY(6px)}}}
 .inline{width:18px;height:18px;vertical-align:-3px;color:var(--ouro)}
+.termo-caixa{background:var(--sup);border:1px solid var(--linha);border-radius:12px;padding:12px 14px;margin:4px 0 14px}
+.termo-caixa summary{cursor:pointer;color:var(--ouro);font-weight:600;min-height:28px}
+.termo-caixa .termo{max-height:320px;overflow-y:auto;margin-top:10px;padding-right:6px}
+.termo section{margin-bottom:12px}.termo h3{font-size:15px;margin-bottom:4px;color:var(--ouro)}.termo p{font-size:15px}

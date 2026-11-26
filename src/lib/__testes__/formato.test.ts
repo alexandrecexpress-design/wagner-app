@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { cpfValido, mascaras, nomeSeguro, cpfOculto, dataSimples } from '../formato'
-import { validarDados, DADOS_VAZIOS, paraBanco } from '../validacao'
+import { validarCadastro, CADASTRO_VAZIO, validarPerfil, perfilParaBanco } from '../validacao'
 
 describe('formato', () => {
   it('valida CPF', () => {
@@ -25,15 +25,14 @@ describe('formato', () => {
 })
 
 describe('validação do cadastro', () => {
-  const ok = { ...DADOS_VAZIOS, nome: 'Maria Souza', cpf: '529.982.247-25', rg: '1', nascimento: '1980-01-01', email: 'a@b.com',
-    celular: '(11) 94200-4495', cep: '04567-000', rua: 'R', numero: '1', bairro: 'B', cidade: 'C', uf: 'SP' }
-  it('aceita dados completos', () => expect(validarDados(ok, true)).toEqual({}))
-  it('recusa menor de idade e nome sem sobrenome', () => {
-    const e = validarDados({ ...ok, nome: 'Maria', nascimento: '2015-01-01' }, true)
-    expect(e.nome).toBeTruthy(); expect(e.nascimento).toMatch(/18 anos/)
+  const ok = { ...CADASTRO_VAZIO, nome: 'Maria Souza', email: 'a@b.com', celular: '(11) 94200-4495', senha: 'segredo123', senha2: 'segredo123', termo: true }
+  it('aceita dados completos', () => expect(validarCadastro(ok)).toEqual({}))
+  it('exige sobrenome, DDD e aceite do termo', () => {
+    const e = validarCadastro({ ...ok, nome: 'Maria', celular: '94200-4495', termo: false })
+    expect(e.nome).toBeTruthy(); expect(e.celular).toMatch(/DDD/); expect(e.termo).toBeTruthy()
   })
-  it('guarda só números', () => {
-    const b = paraBanco(ok)
-    expect(b.cpf).toBe('52998224725'); expect(b.celular).toBe('11942004495'); expect(b.cep).toBe('04567000')
+  it('perfil guarda só números no telefone', () => {
+    expect(perfilParaBanco({ nome: ' Maria   Souza ', celular: '(11) 3333-4444' })).toEqual({ nome: 'Maria Souza', celular: '1133334444' })
+    expect(validarPerfil({ nome: 'Maria Souza', celular: '(11) 3333-4444' })).toEqual({})
   })
 })

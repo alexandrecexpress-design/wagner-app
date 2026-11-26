@@ -12,9 +12,7 @@ def jwt(sub):
     return f"{b({'alg':'HS256','typ':'JWT'})}.{b({'sub':sub,'exp':int(time.time())+3600,'role':'authenticated','aud':'authenticated'})}.assinatura"
 
 def perfil(equipe):
-    return {'id': UID, 'nome': 'Maria Aparecida Souza', 'cpf': '52998224725', 'rg': '12.345.678-9', 'nascimento': '1978-04-12',
-            'email': 'maria@ex.com', 'celular': '11987654321', 'cep': '04567000', 'rua': 'Rua das Laranjeiras', 'numero': '215',
-            'complemento': None, 'bairro': 'Vila Esperança', 'cidade': 'São Paulo', 'uf': 'SP', 'equipe': equipe}
+    return {'id': UID, 'nome': 'Maria Aparecida Souza', 'email': 'maria@ex.com', 'celular': '11987654321', 'equipe': equipe}
 
 SOL = {'id': SID, 'protocolo': 'WAG-2026-00001', 'cliente_id': UID, 'servico': 'usucapiao',
        'respostas': [{'id': 'tempo', 'pergunta': 'Há quanto tempo você está no imóvel?', 'resposta': 'Mais de 15 anos'}],
@@ -36,6 +34,9 @@ class Mock:
         if '/auth/v1/token' in url:
             return await resp({'access_token': jwt(UID), 'token_type': 'bearer', 'expires_in': 3600, 'expires_at': int(time.time()) + 3600,
                                'refresh_token': 'r', 'user': {'id': UID, 'email': 'maria@ex.com', 'aud': 'authenticated', 'role': 'authenticated'}})
+        if '/auth/v1/signup' in url:
+            self.criadas.append(json.loads(req.post_data))
+            return await resp({'id': UID, 'email': 'novo@ex.com', 'aud': 'authenticated', 'role': 'authenticated', 'identities': [{'id': 'x'}]})
         if '/auth/v1/user' in url:
             return await resp({'id': UID, 'email': 'maria@ex.com', 'aud': 'authenticated', 'role': 'authenticated'})
         if '/auth/v1/logout' in url: return await resp({}, 204)
@@ -51,7 +52,7 @@ class Mock:
             if m == 'PATCH':
                 self.criadas.append(json.loads(req.post_data)); return await resp([], 204)
             if m == 'HEAD': return await resp(None, headers={'content-range': '0-0/1'})
-            linha = {**SOL, 'perfis': {'nome': 'Maria Aparecida Souza', 'celular': '11987654321', 'cpf': '52998224725'}}
+            linha = {**SOL, 'perfis': {'nome': 'Maria Aparecida Souza', 'celular': '11987654321', 'email': 'maria@ex.com'}}
             return await resp(linha if obj else [linha], headers={'content-range': '0-0/1'})
         if '/rest/v1/documentos' in url:
             if m == 'POST': self.criadas.append(json.loads(req.post_data)); return await resp(None, 201)
@@ -75,16 +76,25 @@ def checar(c, msg):
 
 async def main():
     async with async_playwright() as p:
-        # ---------- Cadastro: validações e CEP ----------
+        # ---------- Cadastro simples + termo LGPD ----------
         b, pg, erros, mock = await rodar(p, False)
-        await pg.goto(BASE + '/cadastro'); await pg.wait_for_selector('text=Cadastro')
-        await pg.fill('#cpf', '12345678900'); await pg.fill('#cep', '13010000'); await pg.wait_for_timeout(300)
-        checar(await pg.input_value('#cidade') == 'Campinas', 'CEP preenche cidade')
-        checar(await pg.input_value('#cpf') == '123.456.789-00', 'máscara do CPF')
-        await pg.click('button[type=submit]')
-        checar(await pg.locator('text=CPF inválido').count() == 1, 'CPF inválido apontado')
-        checar(await pg.locator('text=Necessário para continuar').count() == 1, 'LGPD obrigatória')
-        await pg.screenshot(path='/tmp/t-cadastro.png', full_page=False)
+        await pg.goto(BASE + '/cadastro'); await pg.wait_for_selector('text=Criar conta')
+        checar(await pg.locator('#cpf, #rg, #cep').count() == 0, 'sem CPF, RG ou endereço')
+        await pg.fill('#nome', 'João'); await pg.fill('#celular', '942004495'); await pg.click('button[type=submit]')
+        checar(await pg.locator('text=Informe nome e sobrenome').count() == 1, 'sobrenome')
+        checar(await pg.locator('text=inclua o DDD').count() == 1, 'DDD')
+        checar(await pg.locator('text=é preciso aceitar o termo').count() == 1, 'termo obrigatório')
+        await pg.click('summary:has-text("Ler o Termo")')
+        checar(await pg.locator('.termo h3:has-text("Seus direitos")').is_visible(), 'termo abre')
+        await pg.fill('#nome', 'João da Silva'); await pg.fill('#email', 'novo@ex.com'); await pg.fill('#celular', '11942004495')
+        checar(await pg.input_value('#celular') == '(11) 94200-4495', 'máscara do telefone')
+        await pg.fill('#senha', 'segredo123'); await pg.fill('#senha2', 'segredo123'); await pg.check('#termo')
+        await pg.screenshot(path='/tmp/t-cadastro.png', full_page=True)
+        await pg.click('button[type=submit]'); await pg.wait_for_selector('text=Confirme seu e-mail')
+        meta = mock.criadas[0]['data']
+        checar(meta == {'nome': 'João da Silva', 'celular': '11942004495', 'lgpd': 'true', 'lgpd_versao': '2026-11-26'}, 'metadados: %s' % meta)
+        await pg.goto(BASE + '/termo'); await pg.wait_for_selector('text=Termo de consentimento e privacidade')
+        checar(not erros, 'erros de JS: %s' % erros)
         await b.close()
 
         # ---------- Cliente: login, orçamento com documento ----------
@@ -118,7 +128,8 @@ async def main():
         await pg.screenshot(path='/tmp/t-enviada.png')
         await pg.click('text=Acompanhar solicitação'); await pg.wait_for_selector('text=Protocolo WAG-2026-00001')
         await pg.screenshot(path='/tmp/t-detalhe.png', full_page=True)
-        await pg.click('text=Perfil'); await pg.wait_for_selector('text=529.***.***-25')
+        await pg.click('text=Perfil'); await pg.wait_for_selector('text=(11) 98765-4321')
+        checar(await pg.locator('text=CPF').count() == 0, 'perfil sem CPF')
         checar(not erros, 'erros de JS: %s' % erros)
         await b.close()
 

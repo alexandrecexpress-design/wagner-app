@@ -12,6 +12,7 @@ import Orcamento from './pages/Orcamento'
 import Solicitacoes from './pages/Solicitacoes'
 import SolicitacaoPagina from './pages/Solicitacao'
 import PerfilPagina from './pages/Perfil'
+import { PaginaTermo } from './components/Termo'
 import Painel from './painel/Painel'
 import PainelSolicitacao from './painel/PainelSolicitacao'
 
@@ -54,6 +55,7 @@ export default function App() {
       <Route path="/" element={sessao ? <Protegida><Navigate to={inicio} replace /></Protegida> : <Navigate to="/entrar" replace />} />
       <Route path="/entrar" element={sessao && perfil ? <Navigate to={inicio} replace /> : <Acesso modo="entrar" />} />
       <Route path="/cadastro" element={sessao && perfil ? <Navigate to={inicio} replace /> : <Acesso modo="cadastro" />} />
+      <Route path="/termo" element={<PaginaTermo />} />
       <Route path="/recuperar-senha" element={<RecuperarSenha />} />
       <Route path="/nova-senha" element={<NovaSenha />} />
       <Route path="/servicos" element={<Protegida><Servicos /></Protegida>} />

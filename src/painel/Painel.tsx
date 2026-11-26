@@ -7,7 +7,7 @@ import { data, mascaras } from '../lib/formato'
 import { atrasada } from '../pages/Solicitacoes'
 import { useAuth } from '../lib/auth'
 
-type Linha = Solicitacao & { perfis: { nome: string; celular: string; cpf: string } | null }
+type Linha = Solicitacao & { perfis: { nome: string; celular: string; email: string } | null }
 type Filtro = Status | 'atrasadas' | 'todas'
 
 export default function Painel() {
@@ -20,7 +20,7 @@ export default function Painel() {
   const [busca, setBusca] = useState('')
 
   useEffect(() => {
-    supabase.from('solicitacoes').select('*, perfis(nome, celular, cpf)').order('criado_em', { ascending: false }).limit(1000)
+    supabase.from('solicitacoes').select('*, perfis(nome, celular, email)').order('criado_em', { ascending: false }).limit(1000)
       .then(({ data, error }) => { if (error) setErro(mensagemErro(error)); setLinhas((data as Linha[]) ?? []) })
   }, [])
 
@@ -36,8 +36,8 @@ export default function Painel() {
     return (linhas ?? []).filter(l =>
       (filtro === 'todas' || (filtro === 'atrasadas' ? atrasada(l) : l.status === filtro)) &&
       (!servico || l.servico === servico) &&
-      (!b || l.protocolo.toLowerCase().includes(b) || (l.perfis?.nome ?? '').toLowerCase().includes(b) ||
-        (bDig.length >= 3 && ((l.perfis?.cpf ?? '').includes(bDig) || (l.perfis?.celular ?? '').includes(bDig))))
+      (!b || l.protocolo.toLowerCase().includes(b) || (l.perfis?.nome ?? '').toLowerCase().includes(b) || (l.perfis?.email ?? '').toLowerCase().includes(b) ||
+        (bDig.length >= 3 && ((l.perfis?.celular ?? '').includes(bDig))))
     ).sort((a, b) => filtro === 'em_analise' || filtro === 'atrasadas' ? a.prazo.localeCompare(b.prazo) : b.criado_em.localeCompare(a.criado_em))
   }, [linhas, filtro, servico, busca])
 
@@ -59,7 +59,7 @@ export default function Painel() {
       </div>
       <div className="filtros">
         <div className="campo"><label htmlFor="busca">Buscar</label>
-          <input id="busca" className="entrada" placeholder="Protocolo, nome, CPF ou celular" value={busca} onChange={e => setBusca(e.target.value)} /></div>
+          <input id="busca" className="entrada" placeholder="Protocolo, nome, e-mail ou telefone" value={busca} onChange={e => setBusca(e.target.value)} /></div>
         <div className="campo" style={{ flex: '0 1 240px' }}><label htmlFor="fserv">Serviço</label>
           <select id="fserv" className="entrada" value={servico} onChange={e => setServico(e.target.value)}>
             <option value="">Todos</option>{SERVICOS.map(s => <option key={s.id} value={s.id}>{s.nome}</option>)}
@@ -69,7 +69,7 @@ export default function Painel() {
       {linhas === null ? <Carregando /> : visiveis.length === 0 ? <p className="vazio">Nenhuma solicitação neste filtro.</p> : (
         <div className="tabela-wrap">
           <table>
-            <thead><tr><th>Cliente</th><th>Status</th><th>Serviço</th><th>Protocolo</th><th>Prazo</th><th>Celular</th></tr></thead>
+            <thead><tr><th>Cliente</th><th>Status</th><th>Serviço</th><th>Protocolo</th><th>Prazo</th><th>Telefone</th></tr></thead>
             <tbody>
               {visiveis.map(l => {
                 const venc = atrasada(l)
