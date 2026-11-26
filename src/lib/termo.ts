@@ -6,9 +6,9 @@ export const TERMO_VERSAO = '2026-11-26'
 
 export const EMPRESA = {
   nome: 'Wagner Regularização Imobiliária',
-  cnpj: '',            // ex.: '00.000.000/0001-00' (aparece no termo quando preenchido)
-  endereco: '',        // ex.: 'Rua X, 100, São Paulo/SP'
-  email: '',           // e-mail para pedidos sobre dados pessoais
+  cnpj: '26.250.579/0001-34',
+  endereco: 'Rua Jorge Augusto, 116, Vila Centenário',
+  email: 'alexandre.cexpress@gmail.com', // pedidos sobre dados pessoais (LGPD)
   whatsapp: '(11) 94200-4495'
 }
 
