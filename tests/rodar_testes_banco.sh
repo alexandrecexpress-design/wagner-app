@@ -14,4 +14,5 @@ P="psql -h $DIR -p 54329 -U postgres -q -v ON_ERROR_STOP=1"
 run "$P -f tests/mock_supabase.sql"
 run "$P -f supabase/migrations/0001_inicial.sql"
 run "$P -f supabase/migrations/0001_inicial.sql"   # rodar duas vezes não pode quebrar
+run "$P -f supabase/migrations/0002_permissoes.sql"
 run "$P -f tests/test_regras.sql"

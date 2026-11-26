@@ -339,8 +339,21 @@ create policy avisos_marcar_lido on public.avisos for update to authenticated
 revoke update on public.avisos from authenticated;
 grant update (lido_em) on public.avisos to authenticated;
 
-revoke execute on function public.somar_dias_uteis(timestamptz,int) from anon;
-revoke execute on function public.previsao_prazo() from anon;
+-- Permissões explícitas (projetos novos do Supabase não liberam tabelas automaticamente).
+-- As regras de RLS acima continuam decidindo QUAIS linhas cada pessoa vê.
+grant usage on schema public to authenticated, service_role;
+grant select, insert, update, delete on public.feriados to authenticated;
+grant select, update on public.perfis to authenticated;
+grant select, insert, update on public.solicitacoes to authenticated;
+grant select, insert on public.documentos to authenticated;
+grant select on public.avisos to authenticated;
+grant usage, select on sequence public.protocolo_seq to authenticated;
+grant all on public.feriados, public.perfis, public.solicitacoes, public.documentos, public.avisos to service_role;
+grant usage, select on sequence public.protocolo_seq to service_role;
+grant execute on function public.eh_equipe(), public.previsao_prazo(),
+  public.somar_dias_uteis(timestamptz,int), public.cpf_valido(text) to authenticated, service_role;
+revoke execute on function public.somar_dias_uteis(timestamptz,int) from anon, public;
+revoke execute on function public.previsao_prazo() from anon, public;
 
 -- ---------- Arquivos: pasta privada "documentos" ------------------------
 -- Caminho de cada arquivo: <id do cliente>/<id da solicitação>/<nome>

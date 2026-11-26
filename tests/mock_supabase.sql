@@ -3,9 +3,8 @@ create role anon nologin;
 create role authenticated nologin;
 create role service_role nologin bypassrls;
 grant usage on schema public to anon, authenticated, service_role;
-alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
-alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;
-alter default privileges in schema public grant execute on functions to anon, authenticated, service_role;
+-- Projetos novos do Supabase NÃO dão privilégios automáticos nas tabelas: a migração precisa conceder tudo.
+alter default privileges in schema public revoke execute on functions from public;
 
 create schema auth;
 grant usage on schema auth to anon, authenticated, service_role;
