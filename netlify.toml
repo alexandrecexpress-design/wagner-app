@@ -1,0 +1,24 @@
+# Configuração de publicação na Netlify (lida automaticamente ao importar o repositório)
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+  # Dados públicos do Supabase (a chave publishable fica dentro do app por natureza;
+  # quem protege os dados são as regras de segurança do banco)
+  VITE_SUPABASE_URL = "https://nicsfbdivgptkjypbgaa.supabase.co"
+  VITE_SUPABASE_ANON_KEY = "sb_publishable_ZdSP40Rktjb9029nTyiaVA_CnPPRtQD"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
