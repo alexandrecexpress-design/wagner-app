@@ -20,8 +20,8 @@ SOL = {'id': SID, 'protocolo': 'WAG-2026-00001', 'cliente_id': UID, 'servico': '
        'criado_em': '2026-11-26T14:00:00+00:00', 'atualizado_em': '2026-11-26T14:00:00+00:00'}
 
 class Mock:
-    def __init__(self, equipe):
-        self.equipe = equipe; self.chamadas = []; self.criadas = []
+    def __init__(self, equipe, sessao_no_cadastro=False):
+        self.equipe = equipe; self.chamadas = []; self.criadas = []; self.sessao_no_cadastro = sessao_no_cadastro
     async def rota(self, route):
         req = route.request; url = req.url; m = req.method
         self.chamadas.append((m, url.split('mock.supabase.test')[1][:90]))
@@ -36,7 +36,10 @@ class Mock:
                                'refresh_token': 'r', 'user': {'id': UID, 'email': 'maria@ex.com', 'aud': 'authenticated', 'role': 'authenticated'}})
         if '/auth/v1/signup' in url:
             self.criadas.append(json.loads(req.post_data))
-            return await resp({'id': UID, 'email': 'novo@ex.com', 'aud': 'authenticated', 'role': 'authenticated', 'identities': [{'id': 'x'}]})
+            user = {'id': UID, 'email': 'maria@ex.com', 'aud': 'authenticated', 'role': 'authenticated', 'identities': [{'id': 'x'}]}
+            if self.sessao_no_cadastro:
+                return await resp({'access_token': jwt(UID), 'token_type': 'bearer', 'expires_in': 3600, 'expires_at': int(time.time()) + 3600, 'refresh_token': 'r', 'user': user})
+            return await resp(user)
         if '/auth/v1/user' in url:
             return await resp({'id': UID, 'email': 'maria@ex.com', 'aud': 'authenticated', 'role': 'authenticated'})
         if '/auth/v1/logout' in url: return await resp({}, 204)
@@ -60,16 +63,32 @@ class Mock:
         if '/storage/v1/object/documentos/' in url: return await resp({'Key': 'documentos/x', 'Id': 'x'})
         return await resp({'message': 'rota não simulada ' + url}, 404)
 
-async def rodar(p, equipe):
+async def rodar(p, equipe, sessao_no_cadastro=False):
     b = await p.chromium.launch(executable_path='/usr/bin/google-chrome')
     ctx = await b.new_context(viewport={'width': 400, 'height': 860}, service_workers='block')
     pg = await ctx.new_page()
     erros = []
     pg.on('pageerror', lambda e: erros.append(str(e)))
-    mock = Mock(equipe)
+    mock = Mock(equipe, sessao_no_cadastro)
     await pg.route('http://mock.supabase.test/**', mock.rota)
     await pg.route('https://viacep.com.br/**', lambda r: r.fulfill(json={'logradouro': 'Rua X', 'bairro': 'Centro', 'localidade': 'Campinas', 'uf': 'SP'}))
     return b, pg, erros, mock
+
+async def responder_usucapiao(pg, arquivo=True):
+    await pg.click(".servico:has-text(\"Usucapião\")"); await pg.wait_for_selector("text=O que você quer fazer?")
+    await pg.click(".opcao:has-text(\"Orçamento gratuito\")"); await pg.wait_for_selector(".passos")
+    for t in ['Mais de 15 anos', 'Urbano (cidade)', 'Moradia', 'Recibo de compra']: await pg.click(f'.chips span:text-is("{t}")')
+    await pg.locator('fieldset:has-text("Paga IPTU") .chips span:text-is("Sim")').click()
+    await pg.locator('fieldset:has-text("reclamou a posse") .chips span:text-is("Não")').click()
+    await pg.fill('#p-local', 'São Paulo/SP'); await pg.click('button:has-text("Continuar")')
+    await pg.wait_for_selector('text=Envio opcional')
+    if arquivo:
+        await pg.set_input_files('#arquivos', files=[{'name': 'IPTU 2026 ção.pdf', 'mimeType': 'application/pdf', 'buffer': b'%PDF-1.4 teste'}])
+    await pg.click('button:has-text("Continuar")'); await pg.wait_for_selector('text=Revisar e enviar')
+
+async def preencher_cadastro(pg):
+    await pg.fill('#nome', 'Maria Aparecida Souza'); await pg.fill('#email', 'maria@ex.com'); await pg.fill('#celular', '11987654321')
+    await pg.fill('#senha', 'segredo123'); await pg.fill('#senha2', 'segredo123'); await pg.check('#termo')
 
 def checar(c, msg):
     if not c: print('FALHOU:', msg); sys.exit(1)
@@ -94,6 +113,45 @@ async def main():
         meta = mock.criadas[0]['data']
         checar(meta == {'nome': 'João da Silva', 'celular': '11942004495', 'lgpd': 'true', 'lgpd_versao': '2026-11-26'}, 'metadados: %s' % meta)
         await pg.goto(BASE + '/termo'); await pg.wait_for_selector('text=Termo de consentimento e privacidade')
+        checar(not erros, 'erros de JS: %s' % erros)
+        await b.close()
+
+        # ---------- Visitante: página inicial -> orçamento -> cadastro no fim (sessão imediata) ----------
+        b, pg, erros, mock = await rodar(p, False, sessao_no_cadastro=True)
+        await pg.goto(BASE + '/'); await pg.wait_for_selector('text=Quero meu orçamento gratuito')
+        await pg.screenshot(path='/tmp/t-inicio.png', full_page=True)
+        await pg.click('text=Quero meu orçamento gratuito'); await pg.wait_for_selector('h1:has-text("Serviços")')
+        await responder_usucapiao(pg)
+        checar(await pg.locator('text=Falta só um passo').count() == 1, 'cadastro no fim')
+        await pg.screenshot(path='/tmp/t-fim.png', full_page=True)
+        await preencher_cadastro(pg); await pg.click('button:has-text("Criar conta e enviar pedido")')
+        await pg.wait_for_selector('text=Solicitação enviada')
+        sol = [c for c in mock.criadas if isinstance(c, dict) and c.get('servico')][0]
+        checar(sol['servico'] == 'usucapiao' and len(sol['respostas']) == 7 and sol['cliente_id'] == UID, 'pedido após cadastro: %s' % sol)
+        checar(any(isinstance(c, dict) and 'caminho' in c for c in mock.criadas), 'documento enviado após cadastro')
+        checar(not erros, 'erros de JS: %s' % erros)
+        await b.close()
+
+        # ---------- Visitante: cadastro exige confirmar e-mail -> pedido guardado -> enviado ao entrar ----------
+        b, pg, erros, mock = await rodar(p, False, sessao_no_cadastro=False)
+        await pg.goto(BASE + '/servicos'); await responder_usucapiao(pg)
+        await preencher_cadastro(pg); await pg.click('button:has-text("Criar conta e enviar pedido")')
+        await pg.wait_for_selector('text=Seu pedido ficou guardado neste aparelho')
+        checar(not [c for c in mock.criadas if isinstance(c, dict) and c.get('servico')], 'nada enviado antes de entrar')
+        await pg.goto(BASE + '/entrar'); await pg.fill('#email', 'maria@ex.com'); await pg.fill('#senha', 'segredo123'); await pg.click('button[type=submit]')
+        await pg.wait_for_selector('text=Protocolo WAG-2026-00001')
+        sol = [c for c in mock.criadas if isinstance(c, dict) and c.get('servico')]
+        checar(len(sol) == 1 and sol[0]['servico'] == 'usucapiao', 'rascunho enviado ao entrar: %s' % sol)
+        checar(any(isinstance(c, dict) and 'IPTU_2026_cao.pdf' in c.get('caminho', '') for c in mock.criadas), 'arquivo do rascunho enviado')
+        checar(not erros, 'erros de JS: %s' % erros)
+        await b.close()
+
+        # ---------- Visitante que já tem conta: entra no fim ----------
+        b, pg, erros, mock = await rodar(p, False)
+        await pg.goto(BASE + '/servicos'); await responder_usucapiao(pg, arquivo=False)
+        await pg.click('button:has-text("Já tenho conta")')
+        await pg.fill('#email', 'maria@ex.com'); await pg.fill('#senha', 'segredo123'); await pg.click('button:has-text("Entrar e enviar pedido")')
+        await pg.wait_for_selector('text=Solicitação enviada')
         checar(not erros, 'erros de JS: %s' % erros)
         await b.close()
 

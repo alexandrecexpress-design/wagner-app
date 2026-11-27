@@ -1,8 +1,11 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from './lib/auth'
 import { configurado } from './lib/supabase'
-import { Carregando } from './components/ui'
+import { Carregando, useToast } from './components/ui'
+import Inicio from './pages/Inicio'
+import { apagarRascunho, enviarPedido, lerRascunho } from './lib/pedido'
+import { servicoPorId } from './lib/servicos'
 import Acesso from './pages/Acesso'
 import RecuperarSenha from './pages/RecuperarSenha'
 import NovaSenha from './pages/NovaSenha'
@@ -34,9 +37,32 @@ function Protegida({ children, equipe }: { children: ReactNode; equipe?: boolean
   return <>{children}</>
 }
 
-export default function App() {
-  const { sessao, perfil, recuperandoSenha } = useAuth()
+// Pedido guardado no aparelho (quando o cadastro exigiu confirmar o e-mail): envia ao entrar.
+function useEnviarRascunho() {
+  const { perfil } = useAuth()
   const navegar = useNavigate()
+  const toast = useToast()
+  const rodando = useRef(false)
+  useEffect(() => {
+    if (!perfil || perfil.equipe || rodando.current) return
+    rodando.current = true
+    ;(async () => {
+      const r = await lerRascunho()
+      if (!r || r.email.toLowerCase() !== perfil.email.toLowerCase()) { rodando.current = false; return }
+      try {
+        const { sol } = await enviarPedido(perfil.id, r.servico, r.respostas, r.arquivos)
+        await apagarRascunho()
+        toast(`Seu pedido de ${servicoPorId(r.servico)?.nome ?? 'orçamento'} foi enviado. Protocolo ${sol.protocolo}.`)
+        navegar(`/solicitacoes/${sol.id}`)
+      } catch { rodando.current = false }
+    })()
+  }, [perfil, navegar, toast])
+}
+
+export default function App() {
+  const { sessao, perfil, carregando, recuperandoSenha } = useAuth()
+  const navegar = useNavigate()
+  useEnviarRascunho()
 
   useEffect(() => { if (recuperandoSenha) navegar('/nova-senha') }, [recuperandoSenha, navegar])
 
@@ -52,15 +78,15 @@ export default function App() {
   const inicio = sessao ? (perfil?.equipe ? '/painel' : '/servicos') : '/entrar'
   return (
     <Routes>
-      <Route path="/" element={sessao ? <Protegida><Navigate to={inicio} replace /></Protegida> : <Navigate to="/entrar" replace />} />
+      <Route path="/" element={carregando ? <Carregando /> : sessao ? <Protegida><Navigate to={inicio} replace /></Protegida> : <Inicio />} />
       <Route path="/entrar" element={sessao && perfil ? <Navigate to={inicio} replace /> : <Acesso modo="entrar" />} />
       <Route path="/cadastro" element={sessao && perfil ? <Navigate to={inicio} replace /> : <Acesso modo="cadastro" />} />
       <Route path="/termo" element={<PaginaTermo />} />
       <Route path="/recuperar-senha" element={<RecuperarSenha />} />
       <Route path="/nova-senha" element={<NovaSenha />} />
-      <Route path="/servicos" element={<Protegida><Servicos /></Protegida>} />
-      <Route path="/servicos/:id" element={<Protegida><ServicoPagina /></Protegida>} />
-      <Route path="/servicos/:id/orcamento" element={<Protegida><Orcamento /></Protegida>} />
+      <Route path="/servicos" element={<Servicos />} />
+      <Route path="/servicos/:id" element={<ServicoPagina />} />
+      <Route path="/servicos/:id/orcamento" element={<Orcamento />} />
       <Route path="/solicitacoes" element={<Protegida><Solicitacoes /></Protegida>} />
       <Route path="/solicitacoes/:id" element={<Protegida><SolicitacaoPagina /></Protegida>} />
       <Route path="/perfil" element={<Protegida><PerfilPagina /></Protegida>} />

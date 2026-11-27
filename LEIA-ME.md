@@ -4,6 +4,8 @@ App web instalável (PWA) para clientes pedirem orçamento gratuito, enviarem do
 
 **O que tem pronto**
 
+- Página inicial de divulgação (logo, chamada para o orçamento gratuito, serviços, como funciona). Qualquer pessoa vê os serviços e responde o questionário sem login; a conta é criada só no fim, para enviar e acompanhar o pedido. Se o Supabase exigir confirmação de e-mail, o pedido fica guardado no aparelho e é enviado sozinho quando a pessoa entrar.
+
 - Cadastro simples: nome completo, e-mail, WhatsApp ou telefone e senha, com aceite obrigatório do Termo de Consentimento e Privacidade (LGPD; texto em `src/lib/termo.ts`, versão aceita fica gravada). Confirmação por e-mail, login e recuperação de senha.
 - Serviços: Usucapião, Inventário, Holding Patrimonial, Regularização de Imóvel e Certidões em geral, cada um com explicação e perguntas próprias.
 - Orçamento em 3 etapas (perguntas, documentos opcionais, revisão), protocolo `WAG-AAAA-00001` e prazo de 3 dias úteis calculado no servidor (pula fins de semana e feriados da tabela `feriados`).

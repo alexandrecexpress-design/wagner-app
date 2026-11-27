@@ -32,8 +32,8 @@ export function Topo({ largo }: { largo?: boolean }) {
   return (
     <header className="topo">
       <div className={largo ? 'in largo' : 'in'}>
-        <Link to="/servicos" aria-label="Início"><Marca /></Link>
-        {perfil && <small>Olá, {perfil.nome.split(' ')[0]}</small>}
+        <Link to="/" aria-label="Início"><Marca /></Link>
+        {perfil ? <small>Olá, {perfil.nome.split(' ')[0]}</small> : <Link className="entrar" to="/entrar">Entrar</Link>}
       </div>
     </header>
   )
@@ -51,9 +51,11 @@ export function Menu() {
         <a href={linkWhatsApp('Olá! Tenho uma dúvida sobre os serviços da Wagner.')} target="_blank" rel="noopener noreferrer">
           <Icone nome="whatsapp" />Dúvidas
         </a>
-        {perfil?.equipe
-          ? <NavLink to="/painel"><Icone nome="painel" />Painel</NavLink>
-          : <NavLink to="/perfil"><Icone nome="usuario" />Perfil</NavLink>}
+        {!perfil
+          ? <NavLink to="/entrar"><Icone nome="usuario" />Entrar</NavLink>
+          : perfil.equipe
+            ? <NavLink to="/painel"><Icone nome="painel" />Painel</NavLink>
+            : <NavLink to="/perfil"><Icone nome="usuario" />Perfil</NavLink>}
       </div>
     </nav>
   )

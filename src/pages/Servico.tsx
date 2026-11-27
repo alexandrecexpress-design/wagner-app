@@ -4,17 +4,19 @@ import { Pagina } from '../components/ui'
 import { Icone } from '../components/Icone'
 import { servicoPorId, linkWhatsApp, WHATSAPP_TEXTO } from '../lib/servicos'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../lib/auth'
 
 export default function ServicoPagina() {
   const { id } = useParams()
   const s = servicoPorId(id)
   const [qtd, setQtd] = useState<number | null>(null)
+  const { perfil } = useAuth()
 
   useEffect(() => {
-    if (!s) return
+    if (!s || !perfil) return
     supabase.from('solicitacoes').select('id', { count: 'exact', head: true }).eq('servico', s.id)
       .then(({ count }) => setQtd(count ?? 0))
-  }, [s])
+  }, [s, perfil])
 
   if (!s) return <Navigate to="/servicos" replace />
   return (
@@ -32,7 +34,7 @@ export default function ServicoPagina() {
       </Link>
       <Link className="opcao" to={`/solicitacoes?servico=${s.id}`}>
         <span className="ico"><Icone nome="relogio" /></span>
-        <span><b>Acompanhar solicitação</b><span>{qtd === null ? 'Veja o andamento dos seus pedidos.' : qtd ? `Você tem ${qtd} ${qtd > 1 ? 'solicitações' : 'solicitação'} deste serviço.` : 'Nenhuma solicitação deste serviço ainda.'}</span></span>
+        <span><b>Acompanhar solicitação</b><span>{!perfil ? 'Já fez um pedido? Entre para ver o andamento.' : qtd === null ? 'Veja o andamento dos seus pedidos.' : qtd ? `Você tem ${qtd} ${qtd > 1 ? 'solicitações' : 'solicitação'} deste serviço.` : 'Nenhuma solicitação deste serviço ainda.'}</span></span>
       </Link>
       <a className="opcao wa" href={linkWhatsApp(`Olá! Tenho uma dúvida sobre ${s.nome}.`)} target="_blank" rel="noopener noreferrer">
         <span className="ico"><Icone nome="whatsapp" /></span>

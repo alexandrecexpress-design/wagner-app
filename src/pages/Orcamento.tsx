@@ -2,11 +2,12 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { AreaArquivos, Campo, ListaArquivos, Opcoes, Pagina, useToast } from '../components/ui'
 import { servicoPorId, type Pergunta } from '../lib/servicos'
-import { supabase, mensagemErro, type Solicitacao } from '../lib/supabase'
+import { supabase, mensagemErro, type Resposta, type Solicitacao } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { arquivoAceito, dataLonga, dataSimples } from '../lib/formato'
-import { enviarDocumentos } from '../lib/arquivos'
+import { enviarPedido, guardarRascunho } from '../lib/pedido'
 import { Icone } from '../components/Icone'
+import { Cadastro, Entrar } from './Acesso'
 
 export default function Orcamento() {
   const { id } = useParams()
@@ -22,13 +23,15 @@ export default function Orcamento() {
   const [enviando, setEnviando] = useState('')
   const [erro, setErro] = useState('')
   const [feito, setFeito] = useState<{ sol: Solicitacao; falhas: string[] } | null>(null)
+  const [conta, setConta] = useState<'criar' | 'entrar'>('criar')
+  const [guardado, setGuardado] = useState(false)
 
   useEffect(() => {
     if (passo === 2) supabase.rpc('previsao_prazo').then(({ data }) => setPrazo((data as string) ?? null))
     window.scrollTo(0, 0)
   }, [passo])
 
-  if (!s || !perfil) return <Navigate to="/servicos" replace />
+  if (!s) return <Navigate to="/servicos" replace />
 
   const respostaDe = (p: Pergunta) => (resp[p.id] ?? '').trim()
 
@@ -50,22 +53,24 @@ export default function Orcamento() {
     setArquivos(a => [...a, ...ok].slice(0, 20))
   }
 
-  const enviar = async () => {
-    setErro(''); setEnviando('Enviando respostas…')
-    const respostas = s.perguntas.filter(p => respostaDe(p)).map(p => ({
-      id: p.id, pergunta: p.texto, resposta: p.tipo === 'data' ? dataSimples(respostaDe(p)) : respostaDe(p)
-    }))
-    const { data, error } = await supabase.from('solicitacoes')
-      .insert({ servico: s.id, respostas, cliente_id: perfil.id }).select().single()
-    if (error || !data) { setEnviando(''); setErro(mensagemErro(error)); return }
-    let falhas: string[] = []
-    if (arquivos.length) {
-      setEnviando(`Enviando documentos (0 de ${arquivos.length})…`)
-      falhas = await enviarDocumentos(perfil.id, data.id, arquivos, n => setEnviando(`Enviando documentos (${n} de ${arquivos.length})…`))
-    }
+  const respostas = (): Resposta[] => s.perguntas.filter(p => respostaDe(p)).map(p => ({
+    id: p.id, pergunta: p.texto, resposta: p.tipo === 'data' ? dataSimples(respostaDe(p)) : respostaDe(p)
+  }))
+
+  const enviar = async (clienteId: string) => {
+    setErro('')
+    try {
+      const r = await enviarPedido(clienteId, s.id, respostas(), arquivos, setEnviando)
+      setFeito(r)
+      window.scrollTo(0, 0)
+    } catch (e) { setErro(mensagemErro(e)); window.scrollTo(0, 0) }
     setEnviando('')
-    setFeito({ sol: data as Solicitacao, falhas })
-    window.scrollTo(0, 0)
+  }
+
+  // Conta criada, mas o Supabase exige confirmar o e-mail: guarda o pedido neste aparelho
+  const guardar = async (email: string) => {
+    await guardarRascunho({ servico: s.id, respostas: respostas(), arquivos, email, criado: Date.now() })
+    setGuardado(true)
   }
 
   if (feito) {
@@ -153,10 +158,29 @@ export default function Orcamento() {
           <p style={{ margin: '16px 0' }}>
             <Icone nome="relogio" className="inline" /> Prazo de análise: {prazo ? <>até <b>{dataLonga(prazo)}</b> (3 dias úteis)</> : '3 dias úteis'}.
           </p>
-          <div className="linha">
-            <button className="botao sec" onClick={() => setPasso(1)} disabled={!!enviando}>Voltar</button>
-            <button className="botao" onClick={enviar} disabled={!!enviando}>{enviando || 'Enviar solicitação'}</button>
-          </div>
+          {enviando && <div className="carregando" style={{ padding: 20 }}><span className="giro" />{enviando}</div>}
+          {!enviando && perfil && (
+            <div className="linha">
+              <button className="botao sec" onClick={() => setPasso(1)}>Voltar</button>
+              <button className="botao" onClick={() => enviar(perfil.id)}>Enviar solicitação</button>
+            </div>
+          )}
+          {!enviando && !perfil && (
+            <section className="cartao fim-cadastro">
+              {!guardado && <>
+                <h2>Falta só um passo</h2>
+                <p className="muted" style={{ margin: '6px 0 14px' }}>Crie sua conta para enviar o pedido e acompanhar a análise pelo app. Se você já tem conta, é só entrar.</p>
+                <nav className="abas" aria-label="Conta">
+                  <button type="button" className={conta === 'criar' ? 'active' : ''} onClick={() => setConta('criar')}>Criar conta</button>
+                  <button type="button" className={conta === 'entrar' ? 'active' : ''} onClick={() => setConta('entrar')}>Já tenho conta</button>
+                </nav>
+              </>}
+              {conta === 'criar'
+                ? <Cadastro titulo="Seus dados" textoBotao="Criar conta e enviar pedido" aoCriar={uid => enviar(uid)} aoConfirmarEmail={guardar}
+                    textoConfirmar="Seu pedido ficou guardado neste aparelho e será enviado sozinho assim que você entrar no app." />
+                : <Entrar textoBotao="Entrar e enviar pedido" aoEntrar={uid => enviar(uid)} aoTrocar={() => setConta('criar')} />}
+            </section>
+          )}
         </>
       )}
     </Pagina>

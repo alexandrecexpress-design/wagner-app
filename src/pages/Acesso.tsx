@@ -35,7 +35,7 @@ export default function Acesso({ modo }: { modo: 'entrar' | 'cadastro' }) {
   )
 }
 
-function Entrar() {
+export function Entrar({ aoEntrar, aoTrocar, textoBotao = 'Entrar' }: { aoEntrar?: (uid: string) => void; aoTrocar?: () => void; textoBotao?: string }) {
   const [email, setEmail] = useState('')
   const [senha, setSenha] = useState('')
   const [erro, setErro] = useState('')
@@ -48,9 +48,10 @@ function Entrar() {
     e.preventDefault(); setErro('')
     if (!email.trim() || !senha) { setErro('Informe e-mail e senha.'); return }
     setEnviando(true)
-    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password: senha })
+    const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password: senha })
     setEnviando(false)
     if (error) { setErro(mensagemErro(error)); setNaoConfirmado(/not confirmed/i.test(error.message)); return }
+    if (aoEntrar && data.user) { aoEntrar(data.user.id); return }
     navegar((local.state as { de?: string })?.de || '/', { replace: true })
   }
 
@@ -60,16 +61,24 @@ function Entrar() {
       {naoConfirmado && <ReenviarConfirmacao email={email.trim()} />}
       <Campo id="email" rotulo="E-mail" type="email" valor={email} aoMudar={setEmail} autoComplete="email" />
       <Campo id="senha" rotulo="Senha" type="password" valor={senha} aoMudar={setSenha} autoComplete="current-password" />
-      <button className="botao" type="submit" disabled={enviando}>{enviando ? 'Entrando…' : 'Entrar'}</button>
+      <button className="botao" type="submit" disabled={enviando}>{enviando ? 'Entrando…' : textoBotao}</button>
       <div className="entre">
         <Link className="link" to="/recuperar-senha">Esqueci minha senha</Link>
-        <Link className="link" to="/cadastro" replace>Criar conta</Link>
+        {aoTrocar
+          ? <button type="button" className="link" onClick={aoTrocar}>Criar conta</button>
+          : <Link className="link" to="/cadastro" replace>Criar conta</Link>}
       </div>
     </form>
   )
 }
 
-function Cadastro() {
+export function Cadastro({ aoCriar, aoConfirmarEmail, titulo = 'Criar conta', textoConfirmar, textoBotao = 'Criar conta' }: {
+  aoCriar?: (uid: string) => void
+  textoBotao?: string
+  aoConfirmarEmail?: (email: string) => void
+  titulo?: string
+  textoConfirmar?: string
+}) {
   const [d, setD] = useState<DadosCadastro>(CADASTRO_VAZIO)
   const [erros, setErros] = useState<Erros>({})
   const [erro, setErro] = useState('')
@@ -99,8 +108,9 @@ function Cadastro() {
     })
     setEnviando(false)
     if (error) { setErro(mensagemErro(error)); window.scrollTo(0, 0); return }
-    if (data.session) navegar('/servicos', { replace: true })
-    else { setConfirmar(d.email.trim()); window.scrollTo(0, 0) }
+    if (data.session && data.user) {
+      if (aoCriar) aoCriar(data.user.id); else navegar('/servicos', { replace: true })
+    } else { aoConfirmarEmail?.(d.email.trim()); setConfirmar(d.email.trim()); window.scrollTo(0, 0) }
   }
 
   if (confirmar) {
@@ -108,6 +118,7 @@ function Cadastro() {
       <div className="sucesso" role="status">
         <h2>Confirme seu e-mail</h2>
         <p style={{ marginTop: 8 }}>Enviamos um link para <b>{confirmar}</b>. Abra o e-mail e toque no link para ativar sua conta. Depois é só entrar.</p>
+        {textoConfirmar && <p style={{ marginTop: 8 }}><b>{textoConfirmar}</b></p>}
         <p className="muted" style={{ marginTop: 8, fontSize: 14 }}>Não chegou? Veja a caixa de spam ou lixo eletrônico. Se ainda assim não aparecer, peça outro:</p>
         <ReenviarConfirmacao email={confirmar} />
       </div>
@@ -116,7 +127,7 @@ function Cadastro() {
 
   return (
     <form onSubmit={enviar} noValidate>
-      <h2>Criar conta</h2>
+      <h2>{titulo}</h2>
       <p className="muted" style={{ margin: '4px 0 16px' }}>Leva menos de 1 minuto.</p>
       {erro && <div className="alerta" role="alert">{erro}</div>}
       <Campo id="nome" rotulo="Nome completo" valor={d.nome} aoMudar={m('nome')} erro={erros.nome} autoComplete="name" />
@@ -138,7 +149,7 @@ function Cadastro() {
         </label>
         {erros.termo && <div className="erro">{erros.termo}</div>}
       </div>
-      <button className="botao" type="submit" disabled={enviando}>{enviando ? 'Criando conta…' : 'Criar conta'}</button>
+      <button className="botao" type="submit" disabled={enviando}>{enviando ? 'Criando conta…' : textoBotao}</button>
     </form>
   )
 }
